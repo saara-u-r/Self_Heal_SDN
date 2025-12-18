@@ -1,0 +1,6 @@
+psutil==5.9.5
+requests==2.31.0
+prometheus-client==0.17.1
+pandas==2.0.3
+numpy==1.24.3
+pyyaml==6.0

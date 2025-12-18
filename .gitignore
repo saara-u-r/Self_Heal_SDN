@@ -1,0 +1,39 @@
+# --- Python & Runtime ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Virtual Environments ---
+# Based on your error logs, you are using ryu_venv_38
+ryu_venv_38/
+venv/
+env/
+.env/
+
+# --- Project Specific: Logs & Data ---
+# We want to keep the directory structure, but not the actual data files
+*.csv
+*.log
+*.pcap
+
+# Specifically ignore the generated training data
+monitoring_and_telemetry/logs/*
+# Exception: Keep the .gitkeep file so the folder exists in the repo
+!monitoring_and_telemetry/logs/.gitkeep
+
+# --- IDE & OS Metadata ---
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# --- Ryu & Mininet Artifacts ---
+# Sometimes Ryu creates temporary pid files
+*.pid
+
+# --- Additional Virtual Environments ---
+model/.venv/
+monitoring_and_telemetry/.venv/
+
+# --- Exceptions (Files we WANT to track) ---
+!model/training_data.csv

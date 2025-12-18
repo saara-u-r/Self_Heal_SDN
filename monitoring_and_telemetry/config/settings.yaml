@@ -1,0 +1,13 @@
+controller:
+  ip: "127.0.0.1"
+  rest_port: 8080  # Default for Ryu/ONOS
+  poll_interval: 1 # Seconds
+
+telemetry:
+  prometheus_port: 8000
+  csv_enabled: true
+  csv_path: "logs/training_data.csv"
+
+# For Z-Score calculation (Sliding Window size)
+normalization:
+  window_size: 50

@@ -1,0 +1,2 @@
+{"fault": "controller_latency", "severity": "critical", "start_time": 1766042012.920398, "end_time": 1766042014.926605, "duration": 2.00620698928833}
+{"fault": "cpu_overload", "severity": "HIGH", "start_time": 1766042615.4329689, "end_time": 1766042615.4333508, "duration": 0.0003819465637207031}
