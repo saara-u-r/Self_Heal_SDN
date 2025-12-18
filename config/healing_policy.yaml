@@ -1,9 +1,7 @@
 cpu_overload:
   severity: HIGH
   workflow:
-    - backup_state
-    - restart_controller
-    - restore_state
+    - no_action
   cooldown: 120
 
 controller_slow:
@@ -29,7 +27,7 @@ packet_in_burst:
   severity: CRITICAL
   workflow:
     - enable_rate_limit
-  cooldown: 300
+  cooldown: 40
 
 normal:
   workflow:

@@ -1,6 +1,8 @@
 from healing_execution.action_library.restart_controller import restart_ryu
 from healing_execution.action_library.reset_flows import reset_all_flows
 from healing_execution.action_library.reroute_paths import reroute_paths
+from healing_execution.action_library.rate_limit import enable_rate_limit
+from healing_execution.action_library.block_attacker import block_attacker
 from healing_execution.state_manager.backup_state import backup_state
 from healing_execution.state_manager.restore_state import restore_state
 
@@ -10,6 +12,8 @@ ACTION_REGISTRY = {
     "restart_controller": restart_ryu,
     "reset_flows": reset_all_flows,
     "reroute_paths": reroute_paths,
+    "enable_rate_limit": block_attacker, # MAP RATE LIMIT TO BLOCK ATTACKER FOR DEMO
+    "block_attacker": block_attacker,
     "no_action": lambda: print("[EXECUTOR] No action required")
 }
 
