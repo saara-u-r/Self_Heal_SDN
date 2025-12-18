@@ -1,136 +1,136 @@
 #!/bin/bash
-set -e  # Exit immediately if a command exits with a non-zero status.
+set -e
 
-# --- CONFIGURATION: PATHS TO VIRTUAL ENVIRONMENTS ---
+PROJECT_ROOT="$PWD"
+RYU_VENV="$PROJECT_ROOT/ryu_venv"
+AGENT_DIR="$PROJECT_ROOT/monitoring_and_telemetry"
+AGENT_VENV="$AGENT_DIR/.venv"
+MODEL_DIR="$PROJECT_ROOT/model"
+MODEL_VENV="$MODEL_DIR/.venv"
 
-# 1. Environment for Ryu Controller
-RYU_VENV="$HOME/Projects/self-heal-sdn/ryu_venv_38/bin/activate"
-
-# 2. Environment for Telemetry Agent
-AGENT_VENV="$HOME/Projects/self-heal-sdn/monitoring_and_telemetry/.venv/bin/activate"
-
-# 3. Environment for ML Models
-MODEL_DIR="$HOME/Projects/self-heal-sdn/model"
-MODEL_VENV_DIR="$MODEL_DIR/.venv"
-MODEL_PYTHON="$MODEL_VENV_DIR/bin/python3"
-MARKER_FILE="$MODEL_VENV_DIR/installed"
-# ----------------------------------------------------
-
-# 1. Kill old processes
+# Cleanup
 echo "[*] Cleaning up old processes..."
-sudo mn -c
-sudo fuser -k 6633/tcp || true
-sudo fuser -k 8080/tcp || true
-sudo fuser -k 8000/tcp || true
-sudo killall python3 || true
+sudo mn -c 2>/dev/null || true
+sudo killall ryu-manager 2>/dev/null || true
+sudo killall python3 2>/dev/null || true
 
-# ----------------------------------------------------
-# CHECK & SETUP ML ENVIRONMENT
-# ----------------------------------------------------
-echo "[*] Checking ML Environment..."
+# --- SETUP FUNCTIONS ---
 
-# Function to verify imports
-verify_ml_env() {
-    "$MODEL_PYTHON" -c "import tensorflow; import pandas; import numpy; import joblib; print('Imports OK')" >/dev/null 2>&1
+setup_ryu() {
+    if [ ! -d "$RYU_VENV" ]; then
+        echo "[*] Creating Ryu Venv (Python 3.8)..."
+        # Ryu requires Python 3.8 due to eventlet issues
+        python3.8 -m venv "$RYU_VENV"
+        source "$RYU_VENV/bin/activate"
+        pip install --upgrade pip
+        pip install "setuptools<58.0.0" "wheel"
+        pip install ryu eventlet==0.30.2
+        deactivate
+    fi
 }
 
-# 1. Verification Check: if marker exists but imports fail, delete marker
-if [ -f "$MARKER_FILE" ]; then
-    if ! verify_ml_env; then
-        echo "[-] ML Environment corrupted (imports failed). Reinstalling..."
-        rm -f "$MARKER_FILE"
-        rm -rf "$MODEL_VENV_DIR"
+setup_agent() {
+    if [ ! -d "$AGENT_VENV" ]; then
+        echo "[*] Creating Agent Venv (Python 3.8)..."
+        python3.8 -m venv "$AGENT_VENV"
+        source "$AGENT_VENV/bin/activate"
+        pip install --upgrade pip
+        pip install -r "$AGENT_DIR/requirements.txt"
+        deactivate
     fi
-fi
+}
 
-if [ ! -f "$MARKER_FILE" ]; then
-    echo "[*] Setting up ML Virtual Environment (First Run)..."
-    echo "    This may take a few minutes."
-
-    # Try to install system dependencies for h5py/tensorflow (Debian/Ubuntu)
-    echo "[*] Attempting to install system dependencies (requires sudo)..."
-    if command -v apt-get >/dev/null; then
-        sudo apt-get update || true
-        # Install hdf5 headers and pkg-config which are CRITICAL for h5py on ARM
-        sudo apt-get install -y pkg-config libhdf5-dev python3-dev build-essential || echo "[-] Failed to install system deps. Continuing..."
+setup_model() {
+    if [ ! -d "$MODEL_VENV" ]; then
+        echo "[*] Creating Model Venv (Python 3.8)..."
+        python3.8 -m venv "$MODEL_VENV"
+        source "$MODEL_VENV/bin/activate"
+        pip install --upgrade pip
+        # Install deps (simplified list based on script)
+        pip install tensorflow pandas numpy scikit-learn joblib pyyaml h5py
+        deactivate
     fi
+}
 
-    # Create Venv
-    if [ ! -d "$MODEL_VENV_DIR" ]; then
-        python3 -m venv "$MODEL_VENV_DIR"
-    fi
-
-    # Install Dependencies
-    # Upgrading pip is crucial for wheels
-    "$MODEL_PYTHON" -m pip install --upgrade pip setuptools wheel
-
-    echo "[*] Installing Python packages..."
-    # Build h5py specifically if needed, then others
-    if ! "$MODEL_PYTHON" -m pip install tensorflow pandas scikit-learn joblib pyyaml; then
-        echo "[-] Standard install failed. Retrying one-by-one..."
-        "$MODEL_PYTHON" -m pip install --upgrade pip
-        # Try installing h5py explicitly with pkg-config help if needed, but usually just pip install h5py works if sys deps are there
-        "$MODEL_PYTHON" -m pip install h5py
-        "$MODEL_PYTHON" -m pip install numpy pandas scikit-learn joblib pyyaml tensorflow
-    fi
-    
-    # Final Verification
-    if verify_ml_env; then
-        touch "$MARKER_FILE"
-        echo "[*] ML Environment Setup Complete."
+# --- CHECK & TRAIN MODELS ---
+train_models() {
+    if [ ! -f "$MODEL_DIR/lstmModels/lstm_final_model.h5" ] || [ ! -f "$MODEL_DIR/ifmodels/isolation_forest_model.pkl" ]; then
+        echo "[*] Models not found. Starting Training..."
+        source "$MODEL_VENV/bin/activate"
+        cd "$MODEL_DIR"
+        python lstm_final.py
+        python isolationForest.py
+        cd "$PROJECT_ROOT"
+        deactivate
+        echo "[*] Training Complete."
     else
-        echo "[!] CRITICAL: ML Environment setup failed. 'tensorflow/pandas' could not be imported."
-        echo "    Please install dependencies manually using: source model/.venv/bin/activate && pip install tensorflow pandas"
-        exit 1
+        echo "[*] Models already trained."
     fi
-else
-    echo "[*] ML Environment found and verified."
-fi
+}
 
-# CHECK & TRAIN MODELS
-echo "[*] Checking Trained Models..."
-if [ ! -f "$MODEL_DIR/lstmModels/lstm_final_model.h5" ] || [ ! -f "$MODEL_DIR/ifmodels/isolation_forest_model.pkl" ]; then
-    echo "[*] Trained models not found. Starting Training..."
-    
-    # Train LSTM
-    echo "    Training LSTM..."
-    cd "$MODEL_DIR" || exit
-    if ! "$MODEL_PYTHON" lstm_final.py; then
-        echo "[!] LSTM Training Failed."
-        exit 1
-    fi
-    
-    # Train Isolation Forest
-    echo "    Training Isolation Forest..."
-    if ! "$MODEL_PYTHON" isolationForest.py; then
-        echo "[!] Isolation Forest Training Failed."
-        exit 1
-    fi
-    
-    cd ..
-    echo "[*] Training Complete."
-else
-    echo "[*] Models already trained."
-fi
+# --- MAIN EXECUTION ---
 
-# ----------------------------------------------------
+echo "[*] Setting up environments..."
+# 1. Setup Venvs
+setup_ryu
+setup_agent
+setup_model
 
-# 2. Start Ryu Controller
+# 2. Train Models if needed
+train_models
+
+# Export env vars for all terminals
+export PROJECT_ROOT
+export PYTHONPATH="$PROJECT_ROOT"
+export PYTHONUNBUFFERED=1
+
+# 3. Start Ryu Controller
 echo "[*] Starting Ryu Controller..."
-gnome-terminal --tab --title="Controller" -- bash -c "source $RYU_VENV; cd controller_apps; ryu-manager sh_controller.py --verbose --ofp-tcp-listen-port 6633; exec bash"
+gnome-terminal --tab --title="Controller" -- bash -c "
+    source '$RYU_VENV/bin/activate'; 
+    cd controller_apps; 
+    echo 'Starting Ryu...';
+    \"$RYU_VENV/bin/ryu-manager\" sh_controller.py ryu.app.ofctl_rest --verbose --ofp-tcp-listen-port 6633; 
+    exec bash"
 
-# 3. Wait for Controller to initialize
+# Wait for Controller
 sleep 5
 
 # 4. Start Telemetry Agent
 echo "[*] Starting Telemetry Agent..."
-gnome-terminal --tab --title="Telemetry" -- bash -c "source $AGENT_VENV; cd monitoring_and_telemetry; python3 telemetry_agent.py; exec bash"
+gnome-terminal --tab --title="Telemetry" -- bash -c "
+    export PYTHONPATH='$PROJECT_ROOT';
+    export PYTHONUNBUFFERED=1;
+    source '$AGENT_VENV/bin/activate'; 
+    cd monitoring_and_telemetry; 
+    echo 'Starting Telemetry Agent...';
+    python3 telemetry_agent.py; 
+    exec bash"
 
 # 5. Start ML Pipeline
 echo "[*] Starting Real-Time ML Pipeline..."
-gnome-terminal --tab --title="ML Pipeline" -- bash -c "cd model; $MODEL_PYTHON run_realtime_pipeline.py; exec bash"
+gnome-terminal --tab --title="ML Pipeline" -- bash -c "
+    export PYTHONPATH='$PROJECT_ROOT';
+    export PYTHONUNBUFFERED=1;
+    source '$MODEL_VENV/bin/activate'; 
+    cd model; 
+    echo 'Starting ML Pipeline...';
+    python run_realtime_pipeline.py; 
+    exec bash"
 
-# 6. Start Mininet
+# 6. Start Healing Listener (New 4th Terminal)
+echo "[*] Starting Healing Agent..."
+gnome-terminal --tab --title="Healing Agent" -- bash -c "
+    export PYTHONPATH='$PROJECT_ROOT';
+    export PYTHONUNBUFFERED=1;
+    source '$MODEL_VENV/bin/activate'; 
+    cd healing_execution;
+    echo 'Starting Healing Listener...';
+    python healing_listener.py;
+    exec bash"
+
+# 7. Start Mininet (Requires Sudo)
 echo "[*] Starting Mininet Topology..."
+echo "    (You may be asked for your sudo password)"
 cd mininet_topology
 sudo python3 topo_healing.py

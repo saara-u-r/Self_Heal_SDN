@@ -37,3 +37,6 @@ monitoring_and_telemetry/.venv/
 
 # --- Exceptions (Files we WANT to track) ---
 !model/training_data.csv
+
+# --- New Exclusions ---
+ryu_venv/

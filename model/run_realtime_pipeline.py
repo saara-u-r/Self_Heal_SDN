@@ -3,7 +3,7 @@ import pandas as pd
 from anomaly_inference import AnomalyInference
 from diagnosis_decision_engine import MLDecisionEngine
 import yaml
-
+import json
 import os
 
 # ---------------- LOAD CONFIG ----------------
@@ -101,7 +101,7 @@ while True:
         decision['timestamp'] = time.time()
         
         # Path: monitoring_and_telemetry/logs/anomaly_decisions.json
-        log_dir = os.path.join(script_dir, '..', 'monitoring_and_telemetry', 'logs')
+        log_dir = os.path.join(SCRIPT_DIR, '..', 'monitoring_and_telemetry', 'logs')
         log_file = os.path.join(log_dir, 'anomaly_decisions.json')
         
         # Ensure dir exists
